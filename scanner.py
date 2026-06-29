@@ -101,6 +101,55 @@ def cache_path(save_path: str) -> str:
     return os.path.join(CACHE_DIR, f"{base}.{key}.orecache")
 
 
+def _spawn_from_playerdata(con, mapx: int = 1024000, mapz: int = 1024000):
+    """Best-effort world spawn (= in-game coordinate origin) for worlds with no
+    explicit DefaultSpawn. The player's spawn is stored as repeated coordinate
+    doubles in the playerdata blob; the real pair is the one that recurs. Pure
+    Python — no game runtime needed, so the app can call it on its own."""
+    import struct
+    from collections import Counter
+    lo = 1000.0
+    cnt: Counter = Counter()
+    try:
+        rows = con.execute("SELECT * FROM playerdata").fetchall()
+    except Exception:
+        return None
+    for r in rows:
+        blob = next((bytes(x) for x in r if isinstance(x, (bytes, bytearray))), None)
+        if not blob:
+            continue
+        ds = []
+        for i in range(len(blob) - 8):
+            d = struct.unpack_from("<d", blob, i)[0]
+            if d == d and lo < d < max(mapx, mapz):     # finite, coordinate-sized
+                ds.append((i, d))
+        for k, (oi, x) in enumerate(ds):
+            if not (lo < x < mapx):
+                continue
+            for oj, z in ds[k + 1:]:
+                if oj - oi > 24:        # X and Z sit next to each other
+                    break
+                if lo < z < mapz:
+                    cnt[(round(x), round(z))] += 1
+                    break
+    if not cnt:
+        return None
+    (sx, sz), _ = cnt.most_common(1)[0]
+    return int(sx), int(sz)
+
+
+def spawn_from_playerdata(save_path: str):
+    """Open a save read-only and detect the world spawn (coordinate origin)."""
+    try:
+        con = sqlite3.connect(f"file:{save_path}?mode=ro", uri=True)
+        try:
+            return _spawn_from_playerdata(con)
+        finally:
+            con.close()
+    except Exception:
+        return None
+
+
 SETTINGS_PATH = os.path.join(CACHE_DIR, "settings.json")
 
 
@@ -425,8 +474,8 @@ class Scanner:
             self._SaveGame = self._pb_des = None
 
     def _read_spawn(self, con) -> tuple[int, int] | None:
-        """World spawn (= coordinate origin shown in-game). Falls back to map
-        middle when no explicit spawn is set."""
+        """World spawn (= coordinate origin shown in-game). Tries the explicit
+        DefaultSpawn, then the player's stored spawn, then the map middle."""
         if not (self._SaveGame and self._pb_des):
             return None
         try:
@@ -449,8 +498,12 @@ class Scanner:
                 if x or z:
                     return int(x), int(z)
             msx, msz = field("MapSizeX"), field("MapSizeZ")
-            if msx and msz:
-                return int(msx) // 2, int(msz) // 2
+            mx = int(msx) if msx else 1024000
+            mz = int(msz) if msz else 1024000
+            pd = _spawn_from_playerdata(con, mx, mz)   # worlds with no DefaultSpawn
+            if pd:
+                return pd
+            return mx // 2, mz // 2
         except Exception:
             pass
         return None

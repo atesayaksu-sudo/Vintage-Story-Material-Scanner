@@ -23,7 +23,8 @@ import scanner
 import map_overlay
 from scanner import (Scanner, find_saves, find_game_dir, load_cache,
                      cluster_from_cache, DEFAULT_METALS, OreCluster, GRADE_RANK,
-                     load_settings, save_settings, is_game_dir)
+                     load_settings, save_settings, is_game_dir,
+                     spawn_from_playerdata)
 
 # write the log to the writable app-data folder (the install dir may be read-only)
 os.makedirs(scanner.APP_DIR, exist_ok=True)
@@ -284,10 +285,14 @@ class OreFinderApp:
                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 self.markers_list,
                 ft.Divider(height=16, color="#222838"),
-                ft.Text("Coordinate origin (defaults to spawn)", size=12,
+                ft.Text("Coordinate origin (your world spawn)", size=12,
                         color="#8A94A6"),
-                ft.Row([self.origin_x_f, self.origin_z_f], spacing=8),
-                ft.Text("Set to spawn so coords match your in-game position.",
+                ft.Row([self.origin_x_f, self.origin_z_f,
+                        ft.IconButton(ft.Icons.RESTORE, icon_size=18,
+                                      tooltip="Reset to the detected world spawn",
+                                      on_click=self._reset_origin)], spacing=8),
+                ft.Text("Auto-detected from your world spawn so app coordinates "
+                        "match the in-game position readout. Tap ↺ to re-detect.",
                         size=10, color="#5A6478"),
                 ft.Divider(height=16, color="#222838"),
                 ft.Text("Auto-rescan", weight=ft.FontWeight.BOLD, size=13),
@@ -398,15 +403,12 @@ class OreFinderApp:
         self._load_markers()
         self._refresh_markers()
         cache = await asyncio.to_thread(load_cache, save)
+        # coordinate origin so app coords match the in-game position readout
+        await asyncio.to_thread(self._apply_origin, save, cache)
         if cache:
             self.cache = cache
             self.clusters = cache.get("clusters", [])
             self.cluster_slider.value = cache.get("cluster_size", 12)
-            sp = cache.get("spawn")
-            if sp:           # default origin to world spawn => coords match in-game
-                self.origin_x, self.origin_z = int(sp[0]), int(sp[1])
-                self.origin_x_f.value = str(int(sp[0]))
-                self.origin_z_f.value = str(int(sp[1]))
             self._apply_filter()
             self._fit()
             self._redraw()
@@ -1046,15 +1048,45 @@ class OreFinderApp:
         self.page.update()
         self._on_filter(None)
 
+    def _apply_origin(self, save, cache):
+        """Pick the coordinate origin: a saved user override wins; otherwise the
+        detected world spawn; otherwise the cached spawn. Keeps app coordinates
+        lined up with the in-game position readout."""
+        ov = self.settings.get("origin")
+        if ov and len(ov) == 2:
+            ox, oz = int(ov[0]), int(ov[1])
+        else:
+            sp = spawn_from_playerdata(save) or (cache.get("spawn") if cache else None)
+            if not sp:
+                return
+            ox, oz = int(sp[0]), int(sp[1])
+        self.origin_x, self.origin_z = ox, oz
+        self.origin_x_f.value = str(ox)
+        self.origin_z_f.value = str(oz)
+
     def _on_origin(self, e):
         try:
             self.origin_x = int(float(self.origin_x_f.value or 0))
             self.origin_z = int(float(self.origin_z_f.value or 0))
         except ValueError:
             return
+        # remember the manual origin so it survives reloads/rescans
+        self.settings["origin"] = [self.origin_x, self.origin_z]
+        save_settings(self.settings)
         self._refresh_list()
         if self.selected:
             self._select(self.selected)
+
+    def _reset_origin(self, e):
+        """Forget the manual override and snap back to the detected world spawn."""
+        self.settings.pop("origin", None)
+        save_settings(self.settings)
+        self._apply_origin(self.save_dd.value, self.cache)
+        self._refresh_list()
+        if self.selected:
+            self._select(self.selected)
+        self._set_status("Origin reset to the detected world spawn.")
+        self.page.update()
 
     def _on_merge_change(self, e):
         if not self.cache or self.busy:
