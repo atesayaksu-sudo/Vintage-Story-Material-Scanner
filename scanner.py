@@ -59,7 +59,7 @@ SAVES_DIR = os.path.join(_DATA_DIR, "Saves")
 APP_DIR = os.path.join(_LOCAL, "VSOreFinder")
 CACHE_DIR = os.path.join(APP_DIR, "cache")
 ASSETS_DIR = os.path.join(APP_DIR, "assets")   # generated PNGs flet serves
-CACHE_VERSION = 12
+CACHE_VERSION = 13
 
 # tree species detected from `log-grown-<species>-*` blocks (for tree-density map)
 TREE_SPECIES = ["oak", "birch", "maple", "pine", "acacia", "kapok", "larch",
@@ -217,7 +217,7 @@ METAL_PRIORITY = {
     # non-metal useful minerals
     "borax": 25, "sulfur": 24, "saltpeter": 26, "alum": 20, "fluorite": 22,
     "phosphorus": 21, "potash": 23, "graphite": 28, "salt": 19, "lapis": 60,
-    "fireclay": 27,
+    "fireclay": 27, "olivine": 26,
     # coal
     "anthracite": 18, "bituminous": 16, "lignite": 14,
     # misc
@@ -387,7 +387,7 @@ TRACKED_MATERIALS = [
     "titanium", "chromium", "bismuth", "manganese", "mercury", "uranium",
     # useful non-metal minerals
     "borax", "sulfur", "saltpeter", "alum", "fluorite", "phosphorus", "potash",
-    "graphite", "salt", "fireclay",
+    "graphite", "salt", "fireclay", "olivine",
     # coal
     "anthracite", "bituminous", "lignite",
     # gems
@@ -602,6 +602,12 @@ class Scanner:
                     if code and code.startswith("rawclay-fire"):
                         keep_ids.add(bid)
                         ore_types[bid] = ("fireclay", "Fireclay", "")
+            # olivine = harvestable crystal clusters (blast-furnace steel flux)
+            if "olivine" in tracked:
+                for bid, code in mapping.items():
+                    if code and code.startswith("crystal-olivine"):
+                        keep_ids.add(bid)
+                        ore_types[bid] = ("olivine", "Olivine", "")
             # misc surface finds (also not ore- blocks)
             if "beehive" in tracked:
                 for bid, code in mapping.items():

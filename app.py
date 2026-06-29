@@ -53,6 +53,7 @@ CATALOG = {
         ("fluorite", "Fluorite", "#7AE8C8"), ("phosphorus", "Phosphorite", "#C8A07A"),
         ("potash", "Sylvite (potash)", "#C8E07A"), ("graphite", "Graphite", "#8A8A96"),
         ("salt", "Halite (salt)", "#E0E8F0"), ("fireclay", "Fireclay", "#C9A876"),
+        ("olivine", "Olivine (steel flux)", "#93A537"),
     ],
     "Coal": [
         ("anthracite", "Anthracite", "#A6ADBD"), ("bituminous", "Bituminous coal", "#717A8C"),
