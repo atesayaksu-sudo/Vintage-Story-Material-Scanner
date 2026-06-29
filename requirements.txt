@@ -1,0 +1,12 @@
+# Vintage Story Ore Finder — Python dependencies
+#
+# REQUIRES Python 3.14 or newer: the app uses the standard-library
+# `compression.zstd` module (added in 3.14) to decompress chunk data.
+#
+# You also need Vintage Story installed locally — the app decodes the world
+# using the game's own DLLs at runtime. No game files are bundled or shipped.
+
+flet==0.85.3
+pythonnet==3.1.0
+numpy>=2.0
+Pillow>=10.0

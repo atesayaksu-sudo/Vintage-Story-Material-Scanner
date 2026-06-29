@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# App runtime data / logs
+orefinder.log
+*.orecache
+*.markers.json
+
+# Generated map images (rebuilt at runtime from your own save) — keep only the icon
+assets/*.png
+!assets/icon.png
+
+# Scratch / test / build artifacts
+smoke_*.py
+test_*.py
+*.spec
+build/
+dist/
+
+# Never commit game saves or personal data
+*.vcdbs
+*.vcdbs-wal
+*.vcdbs-shm
