@@ -25,7 +25,9 @@ from scanner import (Scanner, find_saves, find_game_dir, load_cache,
                      cluster_from_cache, DEFAULT_METALS, OreCluster, GRADE_RANK,
                      load_settings, save_settings, is_game_dir)
 
-LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "orefinder.log")
+# write the log to the writable app-data folder (the install dir may be read-only)
+os.makedirs(scanner.APP_DIR, exist_ok=True)
+LOG_PATH = os.path.join(scanner.APP_DIR, "orefinder.log")
 logging.basicConfig(
     filename=LOG_PATH, level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s")
@@ -805,7 +807,7 @@ class OreFinderApp:
                              f"{L['label'].lower()} yet — click Rescan.", err=True)
             return
         try:
-            assets = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+            assets = scanner.ASSETS_DIR
             os.makedirs(assets, exist_ok=True)
             L["seq"] += 1
             fn = f"{name}_{L['seq']}.png"
@@ -1360,5 +1362,43 @@ def main(page: ft.Page):
         raise
 
 
+def _selftest():
+    """Headless check that the packaged exe can load the game runtime and decode
+    a chunk (the pythonnet path). Writes the result to APP_DIR/selftest.txt."""
+    import sys, sqlite3, traceback
+    res = "FAIL: unknown"
+    try:
+        st = load_settings()
+        saves = find_saves()
+        extra = st.get("extra_saves", [])
+        path = saves[0][1] if saves else (extra[0] if extra else None)
+        if not path:
+            res = "FAIL: no save found"
+        else:
+            sc = Scanner(game_dir=st.get("game_dir"))     # loads .NET via pythonnet
+            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            row = con.execute("SELECT data FROM chunk LIMIT 1").fetchone()
+            con.close()
+            data = bytes(row[0]); i = 0
+            _t, i = scanner._varint(data, i)
+            ln, i = scanner._varint(data, i)
+            arr = sc._decode(data[i:i + ln])
+            res = f"OK: runtime loaded, decoded {len(arr)} blocks from {os.path.basename(path)}"
+    except Exception as e:
+        res = "FAIL: " + repr(e) + "\n" + traceback.format_exc()
+    try:
+        os.makedirs(scanner.APP_DIR, exist_ok=True)
+        with open(os.path.join(scanner.APP_DIR, "selftest.txt"), "w", encoding="utf8") as f:
+            f.write(res)
+    except Exception:
+        pass
+    sys.exit(0 if res.startswith("OK") else 1)
+
+
 if __name__ == "__main__":
-    ft.run(main, assets_dir="assets")
+    import sys
+    if "--selftest" in sys.argv:
+        _selftest()
+    # serve generated maps from the writable app-data folder (frozen-exe safe)
+    os.makedirs(scanner.ASSETS_DIR, exist_ok=True)
+    ft.run(main, assets_dir=scanner.ASSETS_DIR)

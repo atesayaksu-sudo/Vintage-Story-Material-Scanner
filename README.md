@@ -13,6 +13,21 @@ the world you've actually explored (chunks the game has generated).
 
 ---
 
+## Download (Windows — no Python needed)
+
+Grab the latest build from the
+**[Releases page](https://github.com/atesayaksu-sudo/Vintage-Story-Material-Scanner/releases)**:
+
+- **`VS-Material-Scanner-windows.zip`** *(recommended)* — unzip anywhere, then run
+  `VS Material Scanner.exe`. Starts in a few seconds.
+- **`VS-Material-Scanner.exe`** — a single double-click file. Convenient, but the
+  **first launch takes ~30 s** while it unpacks itself.
+
+You still need **Vintage Story installed** — the app uses the game's own code to read
+your world. (Prefer running from source? See below.)
+
+---
+
 ## Features
 
 - **Precise ore targeting** — exact X / Y / Z for every ore block, grouped into veins.

@@ -54,7 +54,11 @@ GAME_DIR_CANDIDATES = [
     os.path.join(_PROGFILES, "Steam", "steamapps", "common", "Vintagestory"),
 ]
 SAVES_DIR = os.path.join(_DATA_DIR, "Saves")
-CACHE_DIR = os.path.join(_LOCAL, "VSOreFinder", "cache")
+# all writable app data lives here (works when frozen into an .exe, where the
+# app's own folder is read-only / a temp extraction)
+APP_DIR = os.path.join(_LOCAL, "VSOreFinder")
+CACHE_DIR = os.path.join(APP_DIR, "cache")
+ASSETS_DIR = os.path.join(APP_DIR, "assets")   # generated PNGs flet serves
 CACHE_VERSION = 12
 
 # tree species detected from `log-grown-<species>-*` blocks (for tree-density map)
@@ -684,11 +688,9 @@ class Scanner:
                 if progress:
                     progress(total, total, "rendering terrain map…")
                 import map_overlay
-                assets = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                      "assets")
-                os.makedirs(assets, exist_ok=True)
+                os.makedirs(ASSETS_DIR, exist_ok=True)
                 key = "%08x" % (zlib.crc32(save_path.encode("utf8")) & 0xFFFFFFFF)
-                png = os.path.join(assets, f"overlay_{key}.png")
+                png = os.path.join(ASSETS_DIR, f"overlay_{key}.png")
                 info = map_overlay.build_overlay(con, png)
                 if info:
                     info["url"] = f"/overlay_{key}.png"
