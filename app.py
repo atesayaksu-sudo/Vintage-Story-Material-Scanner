@@ -22,7 +22,8 @@ import flet.canvas as cv
 import scanner
 import map_overlay
 from scanner import (Scanner, find_saves, find_game_dir, load_cache,
-                     cluster_from_cache, DEFAULT_METALS, OreCluster, GRADE_RANK)
+                     cluster_from_cache, DEFAULT_METALS, OreCluster, GRADE_RANK,
+                     load_settings, save_settings, is_game_dir)
 
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "orefinder.log")
 logging.basicConfig(
@@ -88,6 +89,9 @@ class OreFinderApp:
 
     def __init__(self, page: ft.Page):
         self.page = page
+        self.settings = load_settings()
+        # a custom Vintage Story install folder, if the user pointed us at one
+        self.game_dir = self.settings.get("game_dir") or None
         self.scanner: Scanner | None = None
         self.cache: dict | None = None
         self.clusters: list = []
@@ -151,12 +155,19 @@ class OreFinderApp:
         p.bgcolor = "#10131A"
         p.padding = 0
 
-        saves = find_saves()
+        saves = self._all_saves()
         self.save_dd = ft.Dropdown(
             label="World save", value=saves[0][1] if saves else None,
             options=[ft.dropdown.Option(key=pth, text=f"{nm}  ({sz//1_000_000} MB)")
                      for nm, pth, sz in saves],
             width=300, dense=True, filled=True, on_select=self._on_save_change)
+        # file pickers for worlds outside the default folder + custom game install
+        self.save_picker = ft.FilePicker()
+        self.gamedir_picker = ft.FilePicker()
+        p.services.extend([self.save_picker, self.gamedir_picker])
+        self.browse_btn = ft.IconButton(
+            ft.Icons.FOLDER_OPEN, tooltip="Browse for a world save (.vcdbs) "
+            "anywhere on your PC", on_click=self._on_browse_save)
         self.refresh_btn = ft.FilledButton(
             "Rescan", icon=ft.Icons.RADAR, on_click=self._on_refresh)
         self.progress = ft.ProgressBar(width=240, value=0, visible=False)
@@ -362,7 +373,7 @@ class OreFinderApp:
             bgcolor="#161A23", padding=ft.Padding.symmetric(vertical=8, horizontal=0),
             content=ft.Row([
                 title_drag,
-                self.save_dd, self.refresh_btn,
+                self.save_dd, self.browse_btn, self.refresh_btn,
                 ft.Column([self.progress, self.status], spacing=2, tight=True),
                 ft.Container(width=8), win_btns],
                 spacing=14, vertical_alignment=ft.CrossAxisAlignment.CENTER))
@@ -378,6 +389,8 @@ class OreFinderApp:
         """Load the cached scan for the selected save, if any."""
         save = self.save_dd.value
         if not save:
+            self._set_status("No worlds found in the default folder — click the "
+                             "📂 folder icon to browse for your .vcdbs save.")
             return
         self._set_status("Loading saved scan…")
         self._load_markers()
@@ -405,6 +418,62 @@ class OreFinderApp:
 
     async def _on_save_change(self, e):
         await self._startup()
+
+    # --------------------------------------------------- save / game discovery
+    def _all_saves(self):
+        """Saves in the default folder plus any the user browsed to elsewhere."""
+        found = find_saves()
+        seen = {p for _, p, _ in found}
+        for p in self.settings.get("extra_saves", []):
+            if p not in seen and os.path.exists(p):
+                nm = os.path.splitext(os.path.basename(p))[0]
+                found.append((nm, p, os.path.getsize(p)))
+                seen.add(p)
+        return found
+
+    def _rebuild_save_dd(self, select=None):
+        saves = self._all_saves()
+        self.save_dd.options = [
+            ft.dropdown.Option(key=p, text=f"{nm}  ({sz//1_000_000} MB)")
+            for nm, p, sz in saves]
+        if select:
+            self.save_dd.value = select
+        self.page.update()
+
+    async def _on_browse_save(self, e):
+        files = await self.save_picker.pick_files(
+            dialog_title="Select a Vintage Story world save",
+            allow_multiple=False, allowed_extensions=["vcdbs"])
+        if not files:
+            return
+        path = files[0].path
+        if not path or not path.lower().endswith(".vcdbs"):
+            self._set_status("That isn't a .vcdbs world save.", err=True)
+            return
+        extra = self.settings.get("extra_saves", [])
+        if path not in extra:
+            extra.append(path)
+            self.settings["extra_saves"] = extra
+            save_settings(self.settings)
+        self._rebuild_save_dd(select=path)
+        self._set_status(f"Loaded save: {os.path.basename(path)}")
+        await self._startup()
+
+    async def _on_browse_gamedir(self):
+        path = await self.gamedir_picker.get_directory_path(
+            dialog_title="Select your Vintage Story install folder "
+            "(contains VintagestoryLib.dll)")
+        if not path:
+            return
+        if not is_game_dir(path):
+            self._set_status("That folder doesn't contain VintagestoryLib.dll — "
+                             "pick your Vintage Story install folder.", err=True)
+            return
+        self.game_dir = path
+        self.settings["game_dir"] = path
+        save_settings(self.settings)
+        self.scanner = None          # force re-init against the new game folder
+        self._set_status("Game folder set ✓ — click Rescan.")
 
     # ----------------------------------------------------------- transform
     def w2s(self, wx, wz):
@@ -1231,7 +1300,7 @@ class OreFinderApp:
 
         def blocking():
             if self.scanner is None:
-                self.scanner = Scanner()
+                self.scanner = Scanner(game_dir=self.game_dir)
             return self.scanner.scan_to_cache(
                 save, cluster_size=size, incremental=True, progress=prog)
 
@@ -1262,7 +1331,13 @@ class OreFinderApp:
         except Exception as ex:
             log.exception("scan failed")
             traceback.print_exc()
-            self._set_status(f"Error: {ex}  (see orefinder.log)", err=True)
+            if "install not found" in str(ex):
+                # game DLLs not where we expected — let the user point us at them
+                self._set_status("Vintage Story install not found — opening a "
+                                 "folder picker to locate it…", err=True)
+                await self._on_browse_gamedir()
+            else:
+                self._set_status(f"Error: {ex}  (see orefinder.log)", err=True)
         finally:
             self.busy = False
             self.refresh_btn.disabled = False

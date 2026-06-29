@@ -37,13 +37,23 @@ import numpy as np
 
 _APPDATA = os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming"))
 _LOCAL = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+_PROGFILES = os.environ.get("ProgramFiles", r"C:\Program Files")
+_PROGFILES86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+
+# the game lets users relocate its data folder via this env var; fall back to default
+_DATA_DIR = (os.environ.get("VINTAGE_STORY_DATA_PATH")
+             or os.path.join(_APPDATA, "VintagestoryData"))
 
 GAME_DIR_CANDIDATES = [
+    os.environ.get("VINTAGE_STORY"),                 # set by the official installer
     os.path.join(_APPDATA, "Vintagestory"),
-    r"C:\Program Files\Vintagestory",
+    os.path.join(_PROGFILES, "Vintagestory"),
+    os.path.join(_PROGFILES86, "Vintagestory"),
     os.path.join(_LOCAL, "Vintagestory"),
+    os.path.join(_PROGFILES86, "Steam", "steamapps", "common", "Vintagestory"),
+    os.path.join(_PROGFILES, "Steam", "steamapps", "common", "Vintagestory"),
 ]
-SAVES_DIR = os.path.join(_APPDATA, "VintagestoryData", "Saves")
+SAVES_DIR = os.path.join(_DATA_DIR, "Saves")
 CACHE_DIR = os.path.join(_LOCAL, "VSOreFinder", "cache")
 CACHE_VERSION = 12
 
@@ -85,6 +95,34 @@ def cache_path(save_path: str) -> str:
     key = "%08x" % (zlib.crc32(save_path.encode("utf8")) & 0xFFFFFFFF)
     base = os.path.splitext(os.path.basename(save_path))[0]
     return os.path.join(CACHE_DIR, f"{base}.{key}.orecache")
+
+
+SETTINGS_PATH = os.path.join(CACHE_DIR, "settings.json")
+
+
+def load_settings() -> dict:
+    """User overrides that survive restarts: a custom game folder and any save
+    files browsed-to from outside the default Saves directory."""
+    try:
+        import json
+        with open(SETTINGS_PATH, "r", encoding="utf8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_settings(data: dict):
+    try:
+        import json
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(SETTINGS_PATH, "w", encoding="utf8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+
+def is_game_dir(path: str | None) -> bool:
+    return bool(path and os.path.exists(os.path.join(path, "VintagestoryLib.dll")))
 
 
 # ---------------------------------------------------------------------------
