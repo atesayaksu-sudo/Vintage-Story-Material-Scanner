@@ -101,11 +101,11 @@ def cache_path(save_path: str) -> str:
     return os.path.join(CACHE_DIR, f"{base}.{key}.orecache")
 
 
-def _spawn_from_playerdata(con, mapx: int = 1024000, mapz: int = 1024000):
-    """Best-effort world spawn (= in-game coordinate origin) for worlds with no
-    explicit DefaultSpawn. The player's spawn is stored as repeated coordinate
-    doubles in the playerdata blob; the real pair is the one that recurs. Pure
-    Python — no game runtime needed, so the app can call it on its own."""
+def _player_pos_from_playerdata(con, mapx: int = 1024000, mapz: int = 1024000):
+    """The player's last-saved world (X, Z). It's stored as repeated coordinate
+    doubles in the playerdata blob; the real pair is the one that recurs. Used
+    for calibration: origin = this position - the in-game coords the player
+    reads at that same spot. Pure Python — no game runtime needed."""
     import struct
     from collections import Counter
     lo = 1000.0
@@ -130,7 +130,8 @@ def _spawn_from_playerdata(con, mapx: int = 1024000, mapz: int = 1024000):
                 if oj - oi > 24:        # X and Z sit next to each other
                     break
                 if lo < z < mapz:
-                    cnt[(round(x), round(z))] += 1
+                    # floor to match the in-game HUD's block coordinates
+                    cnt[(int(x), int(z))] += 1
                     break
     if not cnt:
         return None
@@ -138,12 +139,12 @@ def _spawn_from_playerdata(con, mapx: int = 1024000, mapz: int = 1024000):
     return int(sx), int(sz)
 
 
-def spawn_from_playerdata(save_path: str):
-    """Open a save read-only and detect the world spawn (coordinate origin)."""
+def player_pos_from_save(save_path: str):
+    """Open a save read-only and return the player's last-saved (X, Z)."""
     try:
         con = sqlite3.connect(f"file:{save_path}?mode=ro", uri=True)
         try:
-            return _spawn_from_playerdata(con)
+            return _player_pos_from_playerdata(con)
         finally:
             con.close()
     except Exception:
@@ -497,13 +498,12 @@ class Scanner:
                 z = st.GetField("Z", BF).GetValue(sp)
                 if x or z:
                     return int(x), int(z)
+            # no explicit spawn: VS computes it at runtime and never stores it,
+            # so we can't read it — fall back to the map middle. The user can
+            # calibrate the exact origin from their in-game position in the app.
             msx, msz = field("MapSizeX"), field("MapSizeZ")
-            mx = int(msx) if msx else 1024000
-            mz = int(msz) if msz else 1024000
-            pd = _spawn_from_playerdata(con, mx, mz)   # worlds with no DefaultSpawn
-            if pd:
-                return pd
-            return mx // 2, mz // 2
+            if msx and msz:
+                return int(msx) // 2, int(msz) // 2
         except Exception:
             pass
         return None
