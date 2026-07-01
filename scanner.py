@@ -59,7 +59,7 @@ SAVES_DIR = os.path.join(_DATA_DIR, "Saves")
 APP_DIR = os.path.join(_LOCAL, "VSOreFinder")
 CACHE_DIR = os.path.join(APP_DIR, "cache")
 ASSETS_DIR = os.path.join(APP_DIR, "assets")   # generated PNGs flet serves
-CACHE_VERSION = 13
+CACHE_VERSION = 14
 
 # tree species detected from `log-grown-<species>-*` blocks (for tree-density map)
 TREE_SPECIES = ["oak", "birch", "maple", "pine", "acacia", "kapok", "larch",
@@ -194,7 +194,7 @@ MINERAL_INFO = {
     "goethite": ("Goethite", "iron"), "siderite": ("Siderite", "iron"),
     "nativegold": ("Native gold", "gold"), "nativesilver": ("Native silver", "silver"),
     "galena": ("Galena", "lead/silver"), "pentlandite": ("Pentlandite", "nickel"),
-    "chromite": ("Chromite", "chromium"), "ilmenite": ("Ilmenite", "titanium"),
+    "chromite": ("Chromite", "chromium"), "ilmenite": ("Ilmenite", "ilmenite"),
     "rhodochrosite": ("Rhodochrosite", "manganese"), "quartz": ("Quartz", "quartz"),
     "sulfur": ("Sulfur", "sulfur"), "graphite": ("Graphite", "graphite"),
     "lapislazuli": ("Lapis lazuli", "lapis"), "diamond": ("Diamond", "diamond"),
@@ -212,7 +212,7 @@ MINERAL_INFO = {
 METAL_PRIORITY = {
     "gold": 100, "silver": 90, "lead/silver": 85, "meteoriciron": 82,
     "iron": 80, "copper": 70,
-    "tin": 65, "zinc": 60, "nickel": 55, "titanium": 50, "chromium": 45,
+    "tin": 65, "zinc": 60, "nickel": 55, "ilmenite": 50, "chromium": 45,
     "bismuth": 40, "diamond": 95, "emerald": 88, "ruby": 80, "sapphire": 78,
     "peridot": 30, "manganese": 35, "mercury": 42, "uranium": 48,
     # non-metal useful minerals
@@ -385,7 +385,7 @@ TRACKED_MATERIALS = [
     # metals
     "gold", "silver", "lead/silver", "meteoriciron", "iron", "copper", "tin",
     "zinc", "nickel",
-    "titanium", "chromium", "bismuth", "manganese", "mercury", "uranium",
+    "ilmenite", "chromium", "bismuth", "manganese", "mercury", "uranium",
     # useful non-metal minerals
     "borax", "sulfur", "saltpeter", "alum", "fluorite", "phosphorus", "potash",
     "graphite", "salt", "fireclay", "olivine",

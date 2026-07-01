@@ -41,7 +41,7 @@ CATALOG = {
         ("meteoriciron", "Meteoric iron", "#8E9BD4"),
         ("iron", "Iron", "#E36A4B"), ("copper", "Copper", "#E08A3C"),
         ("tin", "Tin", "#C8D6E5"), ("zinc", "Zinc", "#B0A6C9"),
-        ("nickel", "Nickel", "#8FBF9F"), ("titanium", "Titanium", "#7FA8C9"),
+        ("nickel", "Nickel", "#8FBF9F"),
         ("chromium", "Chromium", "#6FB6B0"), ("bismuth", "Bismuth", "#C98FB0"),
         ("manganese", "Manganese", "#A98FC9"), ("mercury", "Cinnabar (mercury)", "#FF8FA0"),
         ("uranium", "Uranium", "#BFE34B"),
@@ -49,6 +49,7 @@ CATALOG = {
     "Flux": [
         ("borax", "Borax", "#E8D27A"),
         ("olivine", "Olivine", "#93A537"),
+        ("ilmenite", "Ilmenite", "#967050"),
     ],
     "Minerals": [
         ("sulfur", "Sulfur", "#E8E04A"),
@@ -723,29 +724,28 @@ class OreFinderApp:
             self._set_status(f"Centered on ({ex}, {ez}).")
 
     def _on_hover(self, e):
-        n = self._ax.shape[0]
-        if not n:
-            return
         wx, wz = self.s2w(e.local_position.x, e.local_position.y)
-        d2 = (self._ax - wx) ** 2 + (self._az - wz) ** 2
-        i = int(np.argmin(d2))
-        # within ~12 screen px?
-        if (d2[i] ** 0.5) * self.scale > 12:
-            if self._hover_idx != -1:
-                self._hover_idx = -1
-                self.hover_label.value = "Hover a vein to see its coordinates"
-                self.hover_label.color = "#8A94A6"
-                self.hover_label.update()
-            return
-        if i == self._hover_idx:
-            return
-        self._hover_idx = i
-        c = self.draw_order[i]
-        col = METAL_COLORS.get(c.metal, "#FFFFFF")
-        dx, dz = c.cx - self.origin_x, c.cz - self.origin_z
-        self.hover_label.value = (f"{c.mineral} {c.best_grade or ''} ×{c.count}  "
-                                  f"@ ({dx}, {c.cy}, {dz})  y{c.ymin}-{c.ymax}")
-        self.hover_label.color = col
+        n = self._ax.shape[0]
+        if n:
+            d2 = (self._ax - wx) ** 2 + (self._az - wz) ** 2
+            i = int(np.argmin(d2))
+            if (d2[i] ** 0.5) * self.scale <= 12:
+                if i != self._hover_idx:
+                    self._hover_idx = i
+                    c = self.draw_order[i]
+                    col = METAL_COLORS.get(c.metal, "#FFFFFF")
+                    dx, dz = c.cx - self.origin_x, c.cz - self.origin_z
+                    self.hover_label.value = (
+                        f"{c.mineral} {c.best_grade or ''} ×{c.count}  "
+                        f"@ ({dx}, {c.cy}, {dz})  y{c.ymin}-{c.ymax}")
+                    self.hover_label.color = col
+                    self.hover_label.update()
+                return
+        # not hovering a vein — always show current cursor world coordinates
+        self._hover_idx = -1
+        gx, gz = int(wx) - self.origin_x, int(wz) - self.origin_z
+        self.hover_label.value = f"X {gx}  Z {gz}"
+        self.hover_label.color = "#8A94A6"
         self.hover_label.update()
 
     def _on_tap(self, e):
@@ -1330,6 +1330,8 @@ class OreFinderApp:
             cache = task.result()
             self.cache = cache
             self.clusters = cache.get("clusters", [])
+            if self.origin_x == 0 and self.origin_z == 0:
+                self._apply_origin(self.save_dd.value, cache)
             self._apply_filter()
             if refit:
                 self._fit()
